@@ -1,0 +1,59 @@
+---
+title: "Unweighted Omnibus Toplines"
+author: "Civis Surveys"
+output: html_document
+date: !r Sys.Date()
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, include = T, message = F, warning = F, verbose = F)
+
+library(tidyverse)
+library(lubridate)
+library(qualtRics)
+library(kableExtra)
+
+# qualtrics_ID <- "SV_3yH1X3f6qqFpPNP" # survey id here
+qualtrics_id <- Sys.getenv('qualtrics_id')
+
+# Get survey meta data ----
+meta <- metadata(qualtrics_ID)
+qLabels <- map_chr(meta$questions, ~ .$questionLabel %||% "")
+qText <- map_chr(meta$questions, ~ .$questionText %||% "")
+qName <- map_chr(meta$questions, ~ .$questionName %||% "")
+qNumber <- map_chr(meta$questions, ~ .$questionNumber %||% "")
+questions <- tibble(qLabels, qText, qName, qNumber) %>% 
+  filter(!is.na(qText))
+
+df <- fetch_survey(qualtrics_ID, force_request = T)
+```
+
+```{r create tables, results = 'asis'}
+relevantQuestions <- questions %>%
+  filter(
+    ((str_detect(qLabels, "precision_") &
+      !str_detect(qLabels, "_text")
+     ) |
+      (str_detect(qLabels, "poli_") &
+         !str_detect(qLabels, "_text")
+       )) & 
+      !str_detect(qLabels, "openend")
+    ) %>%
+  select(qName) 
+
+makePrettyTable <- function(variable){
+  df %>% 
+    group_by(!!sym(variable)) %>% 
+    count() %>% 
+    kable(caption = questions$qText[questions$qName == {{variable}}]) %>% 
+    kable_styling(bootstrap_options = c("striped", "condensed"))
+  }
+
+# makePrettyTable(variable = substantiveQuestions[16])
+
+map(.x = c(as.matrix(relevantQuestions)), # THIS IS A STUPID HACKY WORK AROUND, NEED TO FIX
+          .f = ~makePrettyTable(.)) 
+```
+
+
+
